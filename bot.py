@@ -9,17 +9,15 @@ from telegram.ext import (
 from telegram import Update, ReplyKeyboardMarkup, ReplyKeyboardRemove
 from dotenv import dotenv_values
 from functools import partial
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, AnyStr
 import logging
 
 from custom_types import FunctionalFeature
-
 
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
                     level=logging.INFO)
 
 logger = logging.getLogger(__name__)
-
 
 FUNCTIONAL_FEATURES = FunctionalFeature()
 
@@ -30,10 +28,10 @@ questions_data = {
         'type': 'beginning',
         'encoded_replies': {},
         'next_question': 'Привет, мы рады, что вы решили воспользоваться нашим чекером для проверки своего здоровья. '
-        'Напоминаю, что наш чекер позволяет детектировать хроническую сердечную недостаточность (сокращенно ХСН) '
-        'Для постановки правильного диагноза и лечения Вам необходимо ответить на несколько вопросов. '
-        'Пожалуйста, отвечайте максимально честно! '
-        'Первый вопрос: Наблюдается ли у вас отдышка?',
+                         'Напоминаю, что наш чекер позволяет детектировать хроническую сердечную недостаточность (сокращенно ХСН) '
+                         'Для постановки правильного диагноза и лечения Вам необходимо ответить на несколько вопросов. '
+                         'Пожалуйста, отвечайте максимально честно! '
+                         'Первый вопрос: Наблюдается ли у вас отдышка?',
         'next_question_reply_keyboard': [['Нет', 'При нагрузке', 'В покое']]
     },
     'breathlessness': {
@@ -42,25 +40,25 @@ questions_data = {
             'Нет': 0,
             'При нагрузке': 1,
             'В покое': 2
-            },
+        },
         'next_question': 'Понятно. Скажите пожалуйста, увеличился ли ваш вес за последнюю неделю?',
         'next_question_reply_keyboard': [['Нет', 'Да']]
     },
-    'weight': {
+    'weight_changed': {
         'type': 'usual',
         'encoded_replies': {
             'Нет': 0,
             'Да': 1
-            },
+        },
         'next_question': 'Скажите пожалуйста, есть ли у вас жалобы на перебои в работе сердца',
         'next_question_reply_keyboard': [['Нет', 'Есть']]
     },
-    'changed_heart_failure_complaints': {
+    'heart_failure_complaints': {
         'type': 'usual',
         'encoded_replies': {
             'Нет': 0,
             'Есть': 1
-            },
+        },
         'next_question': 'Скажите пожалуйста, работает ли у вас сердце в режиме галопа?',
         'next_question_reply_keyboard': [['Нет', 'Да']]
     },
@@ -72,7 +70,7 @@ questions_data = {
         },
         'next_question': 'Скажите пожалуйста, в каком положении вы обычно находитесь в постели?',
         'next_question_reply_keyboard': [['Горизонтально', 'С приподнятым головным концом (две и более подушек)',
-                       'Просыпаюсь от удушья каждый раз', 'Сидя']]
+                                          'Просыпаюсь от удушья каждый раз', 'Сидя']]
     },
     'position_in_bed': {
         'type': 'usual',
@@ -98,32 +96,32 @@ questions_data = {
     'wheezing_in_lungs': {
         'type': 'usual',
         'encoded_replies': {
-                    'Нет': 0,
-                    'Нижние отделы': 1,
-                    'До лопаток': 2,
-                    'Над всей поверхностью легких': 3
-                },
+            'Нет': 0,
+            'Нижние отделы': 1,
+            'До лопаток': 2,
+            'Над всей поверхностью легких': 3
+        },
         'next_question': 'Скажите пожалуйста, изменились ли у вас размеры печени?',
         'next_question_reply_keyboard': [['Не увеличена', 'До 5 см', 'Более 5 см']]
     },
     'liver_state': {
         'type': 'usual',
         'encoded_replies': {
-                    'Не увеличена': 0,
-                    'До 5 см': 1,
-                    'Более 5 см': 2
-                },
+            'Не увеличена': 0,
+            'До 5 см': 1,
+            'Более 5 см': 2
+        },
         'next_question': 'Скажите пожалуйста, есть ли у вас отек и если есть, то какой?',
         'next_question_reply_keyboard': [['Нет', 'Пастозность', 'Отеки', 'Анасарка']]
     },
     'edema': {
         'type': 'usual',
         'encoded_replies': {
-                    'Нет': 0,
-                    'Пастозность': 1,
-                    'Отеки': 2,
-                    'Анасарка': 3
-                },
+            'Нет': 0,
+            'Пастозность': 1,
+            'Отеки': 2,
+            'Анасарка': 3
+        },
         'next_question': 'Скажите пожалуйста, какой у вас уровень систолического давления?',
         'next_question_reply_keyboard': [['Более 120 мм рт. ст.', '100-120 мм рт. ст.', 'Менее 120 мм рт. ст.']]
     },
@@ -135,7 +133,7 @@ questions_data = {
             'Менее 120 мм рт. ст.': 2
         },
         'next_question': '',
-        'next_question_reply_keyboard': []
+        'next_question_reply_keyboard': [[]]
     },
 }
 
@@ -246,25 +244,23 @@ def info(update: Update, context: CallbackContext):
 
 
 def dialog_function(update: Update, context: CallbackContext,
-             user_feature: str,
-             question_type: str,
-             encoded_replies: Dict,
-             next_question: str,
-             next_question_reply_keyboard: List[List[Optional]]) -> int:
-
-    if not question_type == 'beginning':
-        user_info[user_feature] = encoded_replies[user_feature][update.message.text]
+                    user_feature: str,
+                    question_type: str,
+                    encoded_replies: Dict,
+                    next_question: str,
+                    next_question_reply_keyboard: List[List[AnyStr]]) -> int:
+    if question_type != 'beginning':
+        user_info[user_feature] = encoded_replies[update.message.text]
         logger.info('Patient %s: %i', user_feature, user_info[user_feature])
 
-    if not question_type == 'final':
+    if question_type != 'final':
         update.message.reply_text(
             next_question,
             reply_markup=ReplyKeyboardMarkup(
-                next_question_reply_keyboard, one_time_keyboard=True
+                next_question_reply_keyboard
             )
         )
-
-        return getattr(FUNCTIONAL_FEATURES, user_feature)
+        return getattr(FUNCTIONAL_FEATURES, user_feature) + 1
     else:
         points = sum(user_info.values())
         if not points:
@@ -278,15 +274,14 @@ def dialog_function(update: Update, context: CallbackContext,
         else:
             functional_class = 'IV ФК'
         context.bot.send_message(chat_id=update.effective_chat.id,
-                                 text=f"Получены данные пациента: {user_info}.")
-        context.bot.send_message(chat_id=update.effective_chat.id,
-                                 text=f"Функциональный класс: {functional_class}.")
+                                 text=f"Получены данные пациента: {user_info}.\n"
+                                      f"Сумма баллов ФК: {points}")
+        update.message.reply_text(
+            f'Функциональный класс {functional_class}',
+            reply_markup=ReplyKeyboardRemove()
+        )
 
-
-class QuestionFactory:
-    def __init__(self):
-
-
+        return ConversationHandler.END
 
 
 def cancel(update: Update, context: CallbackContext) -> int:
@@ -300,6 +295,62 @@ def cancel(update: Update, context: CallbackContext) -> int:
     return ConversationHandler.END
 
 
+"""
+'start': {
+        'type': 'beginning',
+        'encoded_replies': {},
+        'next_question': 'Привет, мы рады, что вы решили воспользоваться нашим чекером для проверки своего здоровья. '
+                         'Напоминаю, что наш чекер позволяет детектировать хроническую сердечную недостаточность (сокращенно ХСН) '
+                         'Для постановки правильного диагноза и лечения Вам необходимо ответить на несколько вопросов. '
+                         'Пожалуйста, отвечайте максимально честно! '
+                         'Первый вопрос: Наблюдается ли у вас отдышка?',
+        'next_question_reply_keyboard': [['Нет', 'При нагрузке', 'В покое']]
+    },
+"""
+
+
+class Question:
+    def __init__(self, question_name: str):
+        self.question_name = question_name
+        self.type = questions_data[question_name]['type']
+        self.encoded_replies = questions_data[question_name]['encoded_replies']
+        self.next_question = questions_data[question_name]['next_question']
+        self.next_question_reply_keyboard = questions_data[question_name]['next_question_reply_keyboard']
+
+        listkeys = list(questions_data.keys())
+        previous_question = None
+        for index, key in enumerate(listkeys):
+            if key == question_name:
+                previous_question = listkeys[index - 1]
+                break
+
+        self.regex = '|'.join(questions_data[previous_question]['next_question_reply_keyboard'][0]) \
+            if question_name != 'start' else None
+
+    def ask(self, update: Update, context: CallbackContext) -> int:
+        return dialog_function(update=update,
+                               context=context,
+                               user_feature=self.question_name,
+                               question_type=self.type,
+                               encoded_replies=self.encoded_replies,
+                               next_question=self.next_question,
+                               next_question_reply_keyboard=self.next_question_reply_keyboard)
+
+
+# def start(update: Update, context: CallbackContext) -> int:
+#     update.message.reply_text(
+#         'Привет, мы рады, что вы решили воспользоваться нашим чекером для проверки своего здоровья. '
+#         'Напоминаю, что наш чекер позволяет детектировать хроническую сердечную недостаточность (сокращенно ХСН) '
+#         'Для постановки правильного диагноза и лечения Вам необходимо ответить на несколько вопросов. '
+#         'Пожалуйста, отвечайте максимально честно! '
+#         'Первый вопрос: Наблюдается ли у вас отдышка?',
+#         reply_markup=ReplyKeyboardMarkup(
+#             [['Нет', 'При нагрузке', 'В покое']], one_time_keyboard=True
+#         )
+#     )
+#     return 0
+
+
 def main() -> None:
     """Run the bot."""
     # Create the Updater and pass it your bot's token.
@@ -309,12 +360,22 @@ def main() -> None:
 
     dispatcher = updater.dispatcher
 
+    questions = {question_name: Question(question_name) for question_name in questions_data}
+
+    entry_points = [CommandHandler(questions['start'].question_name, questions['start'].ask)]
+
+    states = {
+        getattr(FUNCTIONAL_FEATURES, question_name):
+            [MessageHandler(Filters.regex(
+                questions[question_name].regex),
+                questions[question_name].ask
+            )]
+        for question_name in questions
+    }
     # Add conversation handler with the states GENDER, PHOTO, LOCATION and BIO
     conv_handler = ConversationHandler(
-        entry_points=[CommandHandler('start', breathlessness)],
-        states={
-            FUNCTIONAL_FEATURES.breathlessness: [MessageHandler(Filters.regex('^(012)$'), breathlessness)],
-        },
+        entry_points=entry_points,
+        states=states,
         fallbacks=[CommandHandler('cancel', cancel)],
     )
 
@@ -326,7 +387,7 @@ def main() -> None:
     # Run the bot until you press Ctrl-C or the process receives SIGINT,
     # SIGTERM or SIGABRT. This should be used most of the time, since
     # start_polling() is non-blocking and will stop the bot gracefully.
-    #updater.idle()
+    # updater.idle()
 
 
 if __name__ == '__main__':
