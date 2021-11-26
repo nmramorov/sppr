@@ -260,6 +260,7 @@ def main() -> None:
                           port=int(config['PORT']),
                           url_path=config['TOKEN'],
                           webhook_url='https://hidden-island-83862.herokuapp.com/' + config['TOKEN'])
+    updater.idle()
 
 
 if __name__ == '__main__':
