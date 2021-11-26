@@ -259,7 +259,7 @@ def main() -> None:
     updater.start_webhook(listen="0.0.0.0",
                           port=int(config['PORT']),
                           url_path=config['TOKEN'])
-    updater.bot.setWebhook('https://yourherokuappname.herokuapp.com/' + config['TOKEN'])
+    updater.bot.setWebhook('https://hidden-island-83862.herokuapp.com/' + config['TOKEN'])
 
 
 if __name__ == '__main__':
