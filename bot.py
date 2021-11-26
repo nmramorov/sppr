@@ -1,3 +1,9 @@
+import logging
+import os
+from typing import Dict, List, AnyStr
+
+from dotenv import dotenv_values
+from telegram import Update, ReplyKeyboardMarkup, ReplyKeyboardRemove
 from telegram.ext import (
     Updater,
     CallbackContext,
@@ -6,11 +12,6 @@ from telegram.ext import (
     Filters,
     ConversationHandler
 )
-from telegram import Update, ReplyKeyboardMarkup, ReplyKeyboardRemove
-from dotenv import dotenv_values
-from functools import partial
-from typing import Dict, List, Optional, AnyStr
-import logging
 
 from custom_types import FunctionalFeature
 
@@ -144,105 +145,6 @@ def info(update: Update, context: CallbackContext):
                                   "Мраморов Никита и Роман Ефремов из группы J41325c")
 
 
-# def start(update: Update, context: CallbackContext):
-#     reply_keyboard = [['Нет', 'При нагрузке', 'В покое']]
-#
-#     update.message.reply_text(
-#         'Привет, мы рады, что вы решили воспользоваться нашим чекером для проверки своего здоровья. '
-#         'Напоминаю, что наш чекер позволяет детектировать хроническую сердечную недостаточность (сокращенно ХСН) '
-#         'Для постановки правильного диагноза и лечения Вам необходимо ответить на несколько вопросов. '
-#         'Пожалуйста, отвечайте максимально честно! '
-#         'Первый вопрос: Наблюдается ли у вас отдышка?',
-#         reply_markup=ReplyKeyboardMarkup(
-#             reply_keyboard, one_time_keyboard=True, input_field_placeholer='Отдышка?'
-#         )
-#     )
-#
-#     return FUNCTIONAL_FEATURES.breathlessness
-#
-#
-# def breathlessness(update: Update, context: CallbackContext):
-#
-#     reply_keyboard = [['Нет', 'Да']]
-#     user_info['breathlessness'] = encoded_replies['breathlessness'][update.message.text]
-#     logger.info('Patient breathlessness: %i', user_info['breathlessness'])
-#
-#     update.message.reply_text(
-#         'Понятно. Скажите пожалуйста, увеличился ли ваш вес за последнюю неделю?',
-#         reply_markup=ReplyKeyboardMarkup(
-#             reply_keyboard, one_time_keyboard=True, input_field_placeholder='Вес увеличился?'
-#         )
-#     )
-#
-#     return FUNCTIONAL_FEATURES.weight
-#
-#
-# def weight(update: Update, context: CallbackContext):
-#
-#     reply_keyboard = [['Нет', 'Есть']]
-#     user_info['weight'] = encoded_replies['weight'][update.message.text]
-#     logger.info('Patient weight: %i', user_info['weight'])
-#
-#     update.message.reply_text(
-#         'Скажите пожалуйста, есть ли у вас жалобы на перебои в работе сердца',
-#         reply_markup=ReplyKeyboardMarkup(
-#             reply_keyboard, one_time_keyboard=True, input_field_placeholder='Жалобы на перебои в работе сердца?'
-#         )
-#     )
-#
-#     return FUNCTIONAL_FEATURES.changed_heart_failure_complaints
-#
-#
-# def changed_heart_failure_complaints(update: Update, context: CallbackContext):
-#
-#     reply_keyboard = [['Нет', 'Есть']]
-#     user_info['changed_heart_failure_complaints'] = encoded_replies['changed_heart_failure_complaints'][
-#         update.message.text]
-#     logger.info('Patient changed_heart_failure_complaints: %i', user_info['changed_heart_failure_complaints'])
-#
-#     update.message.reply_text(
-#         'Скажите пожалуйста, работает ли у вас сердце в режиме галопа?',
-#         reply_markup=ReplyKeyboardMarkup(
-#             reply_keyboard, one_time_keyboard=True, input_field_placeholder='Сердце работает в галопе?'
-#         )
-#     )
-#
-#     return FUNCTIONAL_FEATURES.heart_rhythm_type
-#
-#
-# def heart_rhythm_type(update: Update, context: CallbackContext):
-#
-#     reply_keyboard = [['Горизонтально', 'С приподнятым головным концом (две и более подушек)',
-#                        'Просыпаюсь от удушья каждый раз', 'Сидя']]
-#     user_info['heart_rhythm_type'] = encoded_replies['heart_rhythm_type'][update.message.text]
-#     logger.info('Patient heart_rhythm_type: %i', user_info['heart_rhythm_type'])
-#
-#     update.message.reply_text(
-#         'Скажите пожалуйста, в каком положении вы обычно находитесь в постели?',
-#         reply_markup=ReplyKeyboardMarkup(
-#             reply_keyboard, one_time_keyboard=True, input_field_placeholder='Ваше положение в постели?'
-#         )
-#     )
-#
-#     return FUNCTIONAL_FEATURES.position_in_bed
-#
-#
-# def position_in_bed(update: Update, context: CallbackContext):
-#
-#     reply_keyboard = [['Нет', 'Есть']]
-#     user_info['position_in_bed'] = encoded_replies['position_in_bed'][update.message.text]
-#     logger.info('Patient position_in_bed: %i', user_info['position_in_bed'])
-#
-#     update.message.reply_text(
-#         'Скажите пожалуйста, в каком положении вы обычно находитесь в постели?',
-#         reply_markup=ReplyKeyboardMarkup(
-#             reply_keyboard, one_time_keyboard=True, input_field_placeholder='Ваше положение в постели?'
-#         )
-#     )
-#
-#     return FUNCTIONAL_FEATURES.position_in_bed
-
-
 def dialog_function(update: Update, context: CallbackContext,
                     user_feature: str,
                     question_type: str,
@@ -295,20 +197,6 @@ def cancel(update: Update, context: CallbackContext) -> int:
     return ConversationHandler.END
 
 
-"""
-'start': {
-        'type': 'beginning',
-        'encoded_replies': {},
-        'next_question': 'Привет, мы рады, что вы решили воспользоваться нашим чекером для проверки своего здоровья. '
-                         'Напоминаю, что наш чекер позволяет детектировать хроническую сердечную недостаточность (сокращенно ХСН) '
-                         'Для постановки правильного диагноза и лечения Вам необходимо ответить на несколько вопросов. '
-                         'Пожалуйста, отвечайте максимально честно! '
-                         'Первый вопрос: Наблюдается ли у вас отдышка?',
-        'next_question_reply_keyboard': [['Нет', 'При нагрузке', 'В покое']]
-    },
-"""
-
-
 class Question:
     def __init__(self, question_name: str):
         self.question_name = question_name
@@ -335,20 +223,6 @@ class Question:
                                encoded_replies=self.encoded_replies,
                                next_question=self.next_question,
                                next_question_reply_keyboard=self.next_question_reply_keyboard)
-
-
-# def start(update: Update, context: CallbackContext) -> int:
-#     update.message.reply_text(
-#         'Привет, мы рады, что вы решили воспользоваться нашим чекером для проверки своего здоровья. '
-#         'Напоминаю, что наш чекер позволяет детектировать хроническую сердечную недостаточность (сокращенно ХСН) '
-#         'Для постановки правильного диагноза и лечения Вам необходимо ответить на несколько вопросов. '
-#         'Пожалуйста, отвечайте максимально честно! '
-#         'Первый вопрос: Наблюдается ли у вас отдышка?',
-#         reply_markup=ReplyKeyboardMarkup(
-#             [['Нет', 'При нагрузке', 'В покое']], one_time_keyboard=True
-#         )
-#     )
-#     return 0
 
 
 def main() -> None:
@@ -382,12 +256,10 @@ def main() -> None:
     dispatcher.add_handler(conv_handler)
 
     # Start the Bot
-    updater.start_polling()
-
-    # Run the bot until you press Ctrl-C or the process receives SIGINT,
-    # SIGTERM or SIGABRT. This should be used most of the time, since
-    # start_polling() is non-blocking and will stop the bot gracefully.
-    # updater.idle()
+    updater.start_webhook(listen="0.0.0.0",
+                          port=int(config['PORT']),
+                          url_path=config['TOKEN'])
+    updater.bot.setWebhook('https://yourherokuappname.herokuapp.com/' + config['TOKEN'])
 
 
 if __name__ == '__main__':
