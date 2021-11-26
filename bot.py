@@ -258,7 +258,7 @@ def main() -> None:
     # Start the Bot
     updater.start_webhook(listen="0.0.0.0",
                           port=int(config['PORT']),
-                          webhook_url='https://hidden-island-83862.herokuapp.com/' + config['TOKEN'])
+                          webhook_url='https://hidden-island-83862.herokuapp.com/')
     updater.idle()
 
 
