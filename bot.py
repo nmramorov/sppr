@@ -27,7 +27,16 @@ receipts = []
 def get_functional_conclusion(update: Update,
                               context: CallbackContext,
                               next_: str):
-    points = sum(user_info.values())
+    points = sum([user_info['breathlessness'],
+                  user_info['weight_changed'],
+                  user_info['heart_failure_complaints'],
+                  user_info['heart_rhythm_type'],
+                  user_info['position_in_bed'],
+                  user_info['swollen_cervical_veins'],
+                  user_info['wheezing_in_lungs'],
+                  user_info['liver_state'],
+                  user_info['edema'],
+                  user_info['systolic_pressure']])
     if not points:
         functional_class = 'отсутствуют клинические признаки ХСН.'
     elif points <= 3:
@@ -42,15 +51,14 @@ def get_functional_conclusion(update: Update,
     else:
         user_info['FK'] = 4
         functional_class = 'IV ФК'
-    added = 'Для продолжения отправьте любое сообщение.' if 'FK' in user_info else ''
+    added = 'Для продолжения отправьте любое сообщение.' if functional_class != 'отсутствуют клинические признаки ХСН.' else ''
     context.bot.send_message(chat_id=update.effective_chat.id,
-                             text=f"Получены данные пациента: {user_info}.\n"
-                                  f"Сумма баллов ФК: {points}\n"
+                             text=f"Сумма баллов ФК: {points}\n"
                                   f'У вас {functional_class}\n' + added,
 
                              reply_markup=ReplyKeyboardRemove())
 
-    return next_ if next_ and functional_class != 'Отсутствие клинических признаков СН.' else ConversationHandler.END
+    return next_ if next_ and functional_class != 'отсутствуют клинические признаки ХСН.' else ConversationHandler.END
 
 
 def get_final_conclusion(update: Update, context: CallbackContext, next_: str, conditions: Dict):
@@ -66,9 +74,10 @@ def get_final_conclusion(update: Update, context: CallbackContext, next_: str, c
             elif isinstance(conditions[condition][feature], list):
                 i += 1
 
-    receipts.append('\n'.join(texts))
+    receipts.append('\n\n - '.join(texts))
+
     context.bot.send_message(chat_id=update.effective_chat.id,
-                             text=f'Ваше лечение:\n\n{receipts[0]}',
+                             text=f'Ваше лечение:\n\n - {receipts[0]}',
                              reply_markup=ReplyKeyboardRemove())
     return next_ if next_ else ConversationHandler.END
 
@@ -189,10 +198,11 @@ def preprocess_df(df: pd.DataFrame):
     return df
 
 
-def get_receipts(df: pd.DataFrame, conditions: Dict) -> List:
-    df_receipts = []
+def get_records(df: pd.DataFrame, conditions: Dict) -> List:
+    records = []
 
     for record in df.to_dict('records'):
+        record_data = {}
         points = sum([record['breathlessness'],
                             record['weight_changed'],
                             record['heart_failure_complaints'],
@@ -205,16 +215,23 @@ def get_receipts(df: pd.DataFrame, conditions: Dict) -> List:
                             record['systolic_pressure']])
 
         if not points:
-            df_receipts.append(['Отсутствие признаков ХСН'])
+            functional_class = 'Отсутствие признаков ХСН'
+            record_data['FK'] = functional_class
+            record_data['receipt'] = 'Лечение не требуется'
+            records.append(record_data)
             continue
-        elif points <= 3:
+        if points <= 3:
             record['FK'] = 1
+            functional_class = 'I ФК'
         elif 4 <= points <= 6:
             record['FK'] = 2
+            functional_class = 'II ФК'
         elif 7 <= points <= 9:
             record['FK'] = 3
+            functional_class = 'III ФК'
         else:
             record['FK'] = 4
+            functional_class = 'IV ФК'
 
         df_texts = []
         for condition in conditions:
@@ -226,14 +243,17 @@ def get_receipts(df: pd.DataFrame, conditions: Dict) -> List:
                         df_texts.extend(conditions[condition][feature][str(record[feature])])
                 elif isinstance(conditions[condition][feature], list):
                     i += 1
-        df_receipts.append(df_texts)
 
-    return df_receipts
+        record_data['FK'] = functional_class
+        record_data['receipt'] = '\n'.join(df_texts)
+        records.append(record_data)
+
+    return records
 
 
 def main() -> None:
     """
-    Для запуска из консоли введи команду 'python3 bot.py <path_to_dataset>'
+    Для запуска из консоли введи команду 'python3 bot.py --path <path_to_dataset>'
     Для запуска бота введи команду 'python3 bot.py'
     """
 
@@ -264,8 +284,10 @@ def main() -> None:
     if args.path:
         df = pd.read_csv(args.path)
         df = preprocess_df(df)
-        df['receipts'] = get_receipts(df, conditions)
-        print(df.receipts.head())
+        records = get_records(df, conditions)
+        records_df = pd.DataFrame(records)
+        records_df.to_csv('records.csv')
+        print('Results were written to records.csv file')
         return
     else:
         questions = {question_name: Question(question_name, questions_data, conditions) for question_name in questions_data}
