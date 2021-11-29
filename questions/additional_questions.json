@@ -153,7 +153,7 @@
           "next_question_reply_keyboard": [["Нет", "Да"]]
       },
     "intolerance_to_ace_inhibitors": {
-          "next_": "hypervolemias",
+          "next_": "hypervolemia",
           "type": "reply",
           "encoded_replies": {
               "Нет": 0,
@@ -162,7 +162,7 @@
           "text": "Имеется ли у вас гиперволемия?",
           "next_question_reply_keyboard": [["Нет", "Да"]]
       },
-    "hypervolemias": {
+    "hypervolemia": {
         "next_": "",
         "type": "final_conclusion",
         "encoded_replies": {

@@ -19,6 +19,7 @@ logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s
 logger = logging.getLogger(__name__)
 
 user_info = {}
+receipts = []
 
 
 def info(update: Update, context: CallbackContext):
@@ -48,16 +49,32 @@ def get_functional_conclusion(update: Update,
     context.bot.send_message(chat_id=update.effective_chat.id,
                              text=f"Получены данные пациента: {user_info}.\n"
                                   f"Сумма баллов ФК: {points}\n"
-                                  f'У вас {functional_class}',
+                                  f'У вас {functional_class}\n'
+                                  f'Для продолжения отправьте любое сообщение.',
                              reply_markup=ReplyKeyboardRemove())
 
     return next_ if next_ else ConversationHandler.END
 
 
-def get_final_conclusion(update: Update, context: CallbackContext, next_: str):
-    print('Pipeline works fine')
-    print(user_info)
+def get_final_conclusion(update: Update, context: CallbackContext, next_: str, conditions: Dict):
+    texts = []
 
+    for condition in conditions:
+        valid_num_of_conditons = len(condition)
+        i = 0
+        for feature in conditions[condition]:
+            if isinstance(conditions[condition][feature], dict):
+                if str(user_info[feature]) in conditions[condition][feature] and i == valid_num_of_conditons - 1:
+                    #print(conditions[condition][feature][str(user_info[feature])])
+                    texts.extend(conditions[condition][feature][str(user_info[feature])])
+            elif isinstance(conditions[condition][feature], list):
+                i += 1
+
+    #print(texts)
+    receipts.append('\n'.join(texts))
+    context.bot.send_message(chat_id=update.effective_chat.id,
+                             text=f'Ваше лечение: {receipts[0]}',
+                             reply_markup=ReplyKeyboardRemove())
     return next_ if next_ else ConversationHandler.END
 
 
@@ -68,7 +85,8 @@ def dialog_function(update: Update,
                     question_type: str,
                     encoded_replies: Dict,
                     text: str,
-                    next_question_reply_keyboard: List[List[AnyStr]]):
+                    next_question_reply_keyboard: List[List[AnyStr]],
+                    conditions: Dict):
     if encoded_replies:
         user_info[user_feature] = encoded_replies[update.message.text]
         logger.info('Patient %s: %i', user_feature, user_info[user_feature])
@@ -84,7 +102,7 @@ def dialog_function(update: Update,
     elif question_type == 'functional_conclusion':
         return get_functional_conclusion(update, context, next_)
     elif question_type == 'final_conclusion':
-        return get_final_conclusion(update, context, next_)
+        return get_final_conclusion(update, context, next_, conditions)
     else:
         if text:
             context.bot.send_message(chat_id=update.effective_chat.id,
@@ -108,13 +126,14 @@ def cancel(update: Update, context: CallbackContext) -> int:
 
 
 class Question:
-    def __init__(self, question_name: str, questions_data: Dict):
+    def __init__(self, question_name: str, questions_data: Dict, conditions: Dict):
         self.question_name = question_name
         self.type = questions_data[question_name]['type']
         self.encoded_replies = questions_data[question_name]['encoded_replies']
         self.text = questions_data[question_name]['text']
         self.next_question_reply_keyboard = questions_data[question_name]['next_question_reply_keyboard']
         self.next_ = questions_data[question_name]['next_']
+        self.conditions = conditions
 
         listkeys = list(questions_data.keys())
         previous_question = None
@@ -134,7 +153,8 @@ class Question:
                                encoded_replies=self.encoded_replies,
                                text=self.text,
                                next_question_reply_keyboard=self.next_question_reply_keyboard,
-                               next_=self.next_)
+                               next_=self.next_,
+                               conditions=self.conditions)
 
 
 def main() -> None:
@@ -152,7 +172,13 @@ def main() -> None:
         with open(config['QUESTIONS_PATH'] + question_file, 'r') as f:
             questions_data.update(load(f))
 
-    questions = {question_name: Question(question_name, questions_data) for question_name in questions_data}
+    conditions = {}
+    condition_files = listdir(config['CONDITIONS_PATH'])
+    for condition_file in condition_files:
+        with open(config['CONDITIONS_PATH'] + condition_file, 'r') as f:
+            conditions.update(load(f))
+
+    questions = {question_name: Question(question_name, questions_data, conditions) for question_name in questions_data}
 
     entry_points = [CommandHandler(questions['start'].question_name, questions['start'].ask)]
 
@@ -174,6 +200,10 @@ def main() -> None:
     dispatcher.add_handler(conv_handler)
 
     updater.start_polling()
+
+
+
+
     # updater.start_webhook(listen="0.0.0.0",
     #                       port=int(config['PORT']),
     #                       webhook_url='https://hidden-island-83862.herokuapp.com/')
