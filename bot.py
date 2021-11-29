@@ -1,3 +1,10 @@
+import logging
+from typing import Dict, List, AnyStr
+from json import load
+from os import listdir
+from dotenv import dotenv_values
+import pandas as pd
+from telegram import Update, ReplyKeyboardMarkup, ReplyKeyboardRemove
 from telegram.ext import (
     Updater,
     CallbackContext,
@@ -6,282 +13,109 @@ from telegram.ext import (
     Filters,
     ConversationHandler
 )
-from telegram import Update, ReplyKeyboardMarkup, ReplyKeyboardRemove
-from dotenv import dotenv_values
-from functools import partial
-from typing import Dict, List, Optional, AnyStr
-import logging
-
-from custom_types import FunctionalFeature
+import argparse
 
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
                     level=logging.INFO)
 
 logger = logging.getLogger(__name__)
 
-FUNCTIONAL_FEATURES = FunctionalFeature()
-
 user_info = {}
-
-questions_data = {
-    'start': {
-        'type': 'beginning',
-        'encoded_replies': {},
-        'next_question': 'Привет, мы рады, что вы решили воспользоваться нашим чекером для проверки своего здоровья. '
-                         'Напоминаю, что наш чекер позволяет детектировать хроническую сердечную недостаточность (сокращенно ХСН) '
-                         'Для постановки правильного диагноза и лечения Вам необходимо ответить на несколько вопросов. '
-                         'Пожалуйста, отвечайте максимально честно! '
-                         'Первый вопрос: Наблюдается ли у вас отдышка?',
-        'next_question_reply_keyboard': [['Нет', 'При нагрузке', 'В покое']]
-    },
-    'breathlessness': {
-        'type': 'usual',
-        'encoded_replies': {
-            'Нет': 0,
-            'При нагрузке': 1,
-            'В покое': 2
-        },
-        'next_question': 'Понятно. Скажите пожалуйста, увеличился ли ваш вес за последнюю неделю?',
-        'next_question_reply_keyboard': [['Нет', 'Да']]
-    },
-    'weight_changed': {
-        'type': 'usual',
-        'encoded_replies': {
-            'Нет': 0,
-            'Да': 1
-        },
-        'next_question': 'Скажите пожалуйста, есть ли у вас жалобы на перебои в работе сердца',
-        'next_question_reply_keyboard': [['Нет', 'Есть']]
-    },
-    'heart_failure_complaints': {
-        'type': 'usual',
-        'encoded_replies': {
-            'Нет': 0,
-            'Есть': 1
-        },
-        'next_question': 'Скажите пожалуйста, работает ли у вас сердце в режиме галопа?',
-        'next_question_reply_keyboard': [['Нет', 'Да']]
-    },
-    'heart_rhythm_type': {
-        'type': 'usual',
-        'encoded_replies': {
-            'Нет': 0,
-            'Да': 1
-        },
-        'next_question': 'Скажите пожалуйста, в каком положении вы обычно находитесь в постели?',
-        'next_question_reply_keyboard': [['Горизонтально', 'С приподнятым головным концом (две и более подушек)',
-                                          'Просыпаюсь от удушья каждый раз', 'Сидя']]
-    },
-    'position_in_bed': {
-        'type': 'usual',
-        'encoded_replies': {
-            'Горизонтально': 0,
-            'С приподнятым головным концом (две и более подушек)': 1,
-            'Просыпаюсь от удушья каждый раз': 2,
-            'Сидя': 3
-        },
-        'next_question': 'Скажите пожалуйста, у вас шейные вены набухшие?',
-        'next_question_reply_keyboard': [['Нет', 'Лежа', 'Стоя']]
-    },
-    'swollen_cervical_veins': {
-        'type': 'usual',
-        'encoded_replies': {
-            'Нет': 0,
-            'Лежа': 1,
-            'Стоя': 2
-        },
-        'next_question': 'Скажите пожалуйста, у вас есть хрипы в легких?',
-        'next_question_reply_keyboard': [['Нет', 'Нижние отделы', 'До лопаток', 'Над всей поверхностью легких']]
-    },
-    'wheezing_in_lungs': {
-        'type': 'usual',
-        'encoded_replies': {
-            'Нет': 0,
-            'Нижние отделы': 1,
-            'До лопаток': 2,
-            'Над всей поверхностью легких': 3
-        },
-        'next_question': 'Скажите пожалуйста, изменились ли у вас размеры печени?',
-        'next_question_reply_keyboard': [['Не увеличена', 'До 5 см', 'Более 5 см']]
-    },
-    'liver_state': {
-        'type': 'usual',
-        'encoded_replies': {
-            'Не увеличена': 0,
-            'До 5 см': 1,
-            'Более 5 см': 2
-        },
-        'next_question': 'Скажите пожалуйста, есть ли у вас отек и если есть, то какой?',
-        'next_question_reply_keyboard': [['Нет', 'Пастозность', 'Отеки', 'Анасарка']]
-    },
-    'edema': {
-        'type': 'usual',
-        'encoded_replies': {
-            'Нет': 0,
-            'Пастозность': 1,
-            'Отеки': 2,
-            'Анасарка': 3
-        },
-        'next_question': 'Скажите пожалуйста, какой у вас уровень систолического давления?',
-        'next_question_reply_keyboard': [['Более 120 мм рт. ст.', '100-120 мм рт. ст.', 'Менее 120 мм рт. ст.']]
-    },
-    'systolic_pressure': {
-        'type': 'final',
-        'encoded_replies': {
-            'Более 120 мм рт. ст.': 0,
-            '100-120 мм рт. ст.': 1,
-            'Менее 120 мм рт. ст.': 2
-        },
-        'next_question': '',
-        'next_question_reply_keyboard': [[]]
-    },
-}
+receipts = []
 
 
-def info(update: Update, context: CallbackContext):
+def get_functional_conclusion(update: Update,
+                              context: CallbackContext,
+                              next_: str):
+    points = sum([user_info['breathlessness'],
+                  user_info['weight_changed'],
+                  user_info['heart_failure_complaints'],
+                  user_info['heart_rhythm_type'],
+                  user_info['position_in_bed'],
+                  user_info['swollen_cervical_veins'],
+                  user_info['wheezing_in_lungs'],
+                  user_info['liver_state'],
+                  user_info['edema'],
+                  user_info['systolic_pressure']])
+    if not points:
+        functional_class = 'отсутствуют клинические признаки ХСН.'
+    elif points <= 3:
+        user_info['FK'] = 1
+        functional_class = 'I ФК'
+    elif 4 <= points <= 6:
+        user_info['FK'] = 2
+        functional_class = 'II ФК'
+    elif 7 <= points <= 9:
+        user_info['FK'] = 3
+        functional_class = 'III ФК'
+    else:
+        user_info['FK'] = 4
+        functional_class = 'IV ФК'
+    added = 'Для продолжения отправьте любое сообщение.' if functional_class != 'отсутствуют клинические признаки ХСН.' else ''
     context.bot.send_message(chat_id=update.effective_chat.id,
-                             text="Привет, меня зовут Original Symptom Checker bot. Мои создатели: "
-                                  "Мраморов Никита и Роман Ефремов из группы J41325c")
+                             text=f"Сумма баллов ФК: {points}\n"
+                                  f'У вас {functional_class}\n' + added,
+
+                             reply_markup=ReplyKeyboardRemove())
+
+    return next_ if next_ and functional_class != 'отсутствуют клинические признаки ХСН.' else ConversationHandler.END
 
 
-# def start(update: Update, context: CallbackContext):
-#     reply_keyboard = [['Нет', 'При нагрузке', 'В покое']]
-#
-#     update.message.reply_text(
-#         'Привет, мы рады, что вы решили воспользоваться нашим чекером для проверки своего здоровья. '
-#         'Напоминаю, что наш чекер позволяет детектировать хроническую сердечную недостаточность (сокращенно ХСН) '
-#         'Для постановки правильного диагноза и лечения Вам необходимо ответить на несколько вопросов. '
-#         'Пожалуйста, отвечайте максимально честно! '
-#         'Первый вопрос: Наблюдается ли у вас отдышка?',
-#         reply_markup=ReplyKeyboardMarkup(
-#             reply_keyboard, one_time_keyboard=True, input_field_placeholer='Отдышка?'
-#         )
-#     )
-#
-#     return FUNCTIONAL_FEATURES.breathlessness
-#
-#
-# def breathlessness(update: Update, context: CallbackContext):
-#
-#     reply_keyboard = [['Нет', 'Да']]
-#     user_info['breathlessness'] = encoded_replies['breathlessness'][update.message.text]
-#     logger.info('Patient breathlessness: %i', user_info['breathlessness'])
-#
-#     update.message.reply_text(
-#         'Понятно. Скажите пожалуйста, увеличился ли ваш вес за последнюю неделю?',
-#         reply_markup=ReplyKeyboardMarkup(
-#             reply_keyboard, one_time_keyboard=True, input_field_placeholder='Вес увеличился?'
-#         )
-#     )
-#
-#     return FUNCTIONAL_FEATURES.weight
-#
-#
-# def weight(update: Update, context: CallbackContext):
-#
-#     reply_keyboard = [['Нет', 'Есть']]
-#     user_info['weight'] = encoded_replies['weight'][update.message.text]
-#     logger.info('Patient weight: %i', user_info['weight'])
-#
-#     update.message.reply_text(
-#         'Скажите пожалуйста, есть ли у вас жалобы на перебои в работе сердца',
-#         reply_markup=ReplyKeyboardMarkup(
-#             reply_keyboard, one_time_keyboard=True, input_field_placeholder='Жалобы на перебои в работе сердца?'
-#         )
-#     )
-#
-#     return FUNCTIONAL_FEATURES.changed_heart_failure_complaints
-#
-#
-# def changed_heart_failure_complaints(update: Update, context: CallbackContext):
-#
-#     reply_keyboard = [['Нет', 'Есть']]
-#     user_info['changed_heart_failure_complaints'] = encoded_replies['changed_heart_failure_complaints'][
-#         update.message.text]
-#     logger.info('Patient changed_heart_failure_complaints: %i', user_info['changed_heart_failure_complaints'])
-#
-#     update.message.reply_text(
-#         'Скажите пожалуйста, работает ли у вас сердце в режиме галопа?',
-#         reply_markup=ReplyKeyboardMarkup(
-#             reply_keyboard, one_time_keyboard=True, input_field_placeholder='Сердце работает в галопе?'
-#         )
-#     )
-#
-#     return FUNCTIONAL_FEATURES.heart_rhythm_type
-#
-#
-# def heart_rhythm_type(update: Update, context: CallbackContext):
-#
-#     reply_keyboard = [['Горизонтально', 'С приподнятым головным концом (две и более подушек)',
-#                        'Просыпаюсь от удушья каждый раз', 'Сидя']]
-#     user_info['heart_rhythm_type'] = encoded_replies['heart_rhythm_type'][update.message.text]
-#     logger.info('Patient heart_rhythm_type: %i', user_info['heart_rhythm_type'])
-#
-#     update.message.reply_text(
-#         'Скажите пожалуйста, в каком положении вы обычно находитесь в постели?',
-#         reply_markup=ReplyKeyboardMarkup(
-#             reply_keyboard, one_time_keyboard=True, input_field_placeholder='Ваше положение в постели?'
-#         )
-#     )
-#
-#     return FUNCTIONAL_FEATURES.position_in_bed
-#
-#
-# def position_in_bed(update: Update, context: CallbackContext):
-#
-#     reply_keyboard = [['Нет', 'Есть']]
-#     user_info['position_in_bed'] = encoded_replies['position_in_bed'][update.message.text]
-#     logger.info('Patient position_in_bed: %i', user_info['position_in_bed'])
-#
-#     update.message.reply_text(
-#         'Скажите пожалуйста, в каком положении вы обычно находитесь в постели?',
-#         reply_markup=ReplyKeyboardMarkup(
-#             reply_keyboard, one_time_keyboard=True, input_field_placeholder='Ваше положение в постели?'
-#         )
-#     )
-#
-#     return FUNCTIONAL_FEATURES.position_in_bed
+def get_final_conclusion(update: Update, context: CallbackContext, next_: str, conditions: Dict):
+    texts = []
+
+    for condition in conditions:
+        valid_num_of_conditons = len(condition)
+        i = 0
+        for feature in conditions[condition]:
+            if isinstance(conditions[condition][feature], dict):
+                if str(user_info[feature]) in conditions[condition][feature] and i == valid_num_of_conditons - 1:
+                    texts.extend(conditions[condition][feature][str(user_info[feature])])
+            elif isinstance(conditions[condition][feature], list):
+                i += 1
+
+    receipts.append('\n\n - '.join(texts))
+
+    context.bot.send_message(chat_id=update.effective_chat.id,
+                             text=f'Ваше лечение:\n\n - {receipts[0]}',
+                             reply_markup=ReplyKeyboardRemove())
+    return next_ if next_ else ConversationHandler.END
 
 
-def dialog_function(update: Update, context: CallbackContext,
+def dialog_function(update: Update, 
+                    context: CallbackContext,
                     user_feature: str,
+                    next_: str,
                     question_type: str,
                     encoded_replies: Dict,
-                    next_question: str,
-                    next_question_reply_keyboard: List[List[AnyStr]]) -> int:
-    if question_type != 'beginning':
+                    text: str,
+                    next_question_reply_keyboard: List[List[AnyStr]],
+                    conditions: Dict):
+    if encoded_replies:
         user_info[user_feature] = encoded_replies[update.message.text]
         logger.info('Patient %s: %i', user_feature, user_info[user_feature])
 
-    if question_type != 'final':
+    if question_type == 'reply':
         update.message.reply_text(
-            next_question,
+            text,
             reply_markup=ReplyKeyboardMarkup(
                 next_question_reply_keyboard
             )
         )
-        return getattr(FUNCTIONAL_FEATURES, user_feature) + 1
+        return next_
+    elif question_type == 'functional_conclusion':
+        return get_functional_conclusion(update, context, next_)
+    elif question_type == 'final_conclusion':
+        return get_final_conclusion(update, context, next_, conditions)
     else:
-        points = sum(user_info.values())
-        if not points:
-            functional_class = 'отсутствие клинических признаков СН.'
-        elif points <= 3:
-            functional_class = 'I ФК'
-        elif 4 <= points <= 6:
-            functional_class = 'II ФК'
-        elif 7 <= points <= 9:
-            functional_class = 'III ФК'
+        if text:
+            context.bot.send_message(chat_id=update.effective_chat.id,
+                                     text=text)
+            update.message.reply_text(
+                reply_markup=ReplyKeyboardRemove()
+            )
         else:
-            functional_class = 'IV ФК'
-        context.bot.send_message(chat_id=update.effective_chat.id,
-                                 text=f"Получены данные пациента: {user_info}.\n"
-                                      f"Сумма баллов ФК: {points}")
-        update.message.reply_text(
-            f'Функциональный класс {functional_class}',
-            reply_markup=ReplyKeyboardRemove()
-        )
-
-        return ConversationHandler.END
+            return ConversationHandler.END
 
 
 def cancel(update: Update, context: CallbackContext) -> int:
@@ -289,33 +123,21 @@ def cancel(update: Update, context: CallbackContext) -> int:
     user = update.message.from_user
     logger.info("User %s canceled the conversation.", user.first_name)
     update.message.reply_text(
-        'Bye! I hope we can talk again some day.', reply_markup=ReplyKeyboardRemove()
+        'До свидания!', reply_markup=ReplyKeyboardRemove()
     )
 
     return ConversationHandler.END
 
 
-"""
-'start': {
-        'type': 'beginning',
-        'encoded_replies': {},
-        'next_question': 'Привет, мы рады, что вы решили воспользоваться нашим чекером для проверки своего здоровья. '
-                         'Напоминаю, что наш чекер позволяет детектировать хроническую сердечную недостаточность (сокращенно ХСН) '
-                         'Для постановки правильного диагноза и лечения Вам необходимо ответить на несколько вопросов. '
-                         'Пожалуйста, отвечайте максимально честно! '
-                         'Первый вопрос: Наблюдается ли у вас отдышка?',
-        'next_question_reply_keyboard': [['Нет', 'При нагрузке', 'В покое']]
-    },
-"""
-
-
 class Question:
-    def __init__(self, question_name: str):
+    def __init__(self, question_name: str, questions_data: Dict, conditions: Dict):
         self.question_name = question_name
         self.type = questions_data[question_name]['type']
         self.encoded_replies = questions_data[question_name]['encoded_replies']
-        self.next_question = questions_data[question_name]['next_question']
+        self.text = questions_data[question_name]['text']
         self.next_question_reply_keyboard = questions_data[question_name]['next_question_reply_keyboard']
+        self.next_ = questions_data[question_name]['next_']
+        self.conditions = conditions
 
         listkeys = list(questions_data.keys())
         previous_question = None
@@ -333,61 +155,168 @@ class Question:
                                user_feature=self.question_name,
                                question_type=self.type,
                                encoded_replies=self.encoded_replies,
-                               next_question=self.next_question,
-                               next_question_reply_keyboard=self.next_question_reply_keyboard)
+                               text=self.text,
+                               next_question_reply_keyboard=self.next_question_reply_keyboard,
+                               next_=self.next_,
+                               conditions=self.conditions)
 
 
-# def start(update: Update, context: CallbackContext) -> int:
-#     update.message.reply_text(
-#         'Привет, мы рады, что вы решили воспользоваться нашим чекером для проверки своего здоровья. '
-#         'Напоминаю, что наш чекер позволяет детектировать хроническую сердечную недостаточность (сокращенно ХСН) '
-#         'Для постановки правильного диагноза и лечения Вам необходимо ответить на несколько вопросов. '
-#         'Пожалуйста, отвечайте максимально честно! '
-#         'Первый вопрос: Наблюдается ли у вас отдышка?',
-#         reply_markup=ReplyKeyboardMarkup(
-#             [['Нет', 'При нагрузке', 'В покое']], one_time_keyboard=True
-#         )
-#     )
-#     return 0
+def preprocess_df(df: pd.DataFrame):
+    df.rename(columns={'weigth_changed': 'weight_changed'}, inplace=True)
+    values = {}
+    for column in df.columns:
+        uniques = df[column].unique()
+        if len(uniques) > 5:
+            values[column] = df[column].mean()
+        else:
+            values[column] = 0
+
+    df.fillna(value=values, inplace=True)
+    df = df[values.keys()].apply(pd.to_numeric)
+
+    df.loc[df.systolic_pressure > 120, 'systolic_pressure'] = 0
+    df.loc[((df.systolic_pressure >= 85) & (df.systolic_pressure <= 120)), 'systolic_pressure'] = 1
+    df.loc[((df.systolic_pressure < 85) & (df.systolic_pressure != 0) & (
+                df.systolic_pressure != 1)), 'systolic_pressure'] = 2
+
+    df.loc[df.heart_rate >= 70, 'heart_rate'] = 0
+    df.loc[((df.heart_rate < 70) & (df.heart_rate != 0)), 'heart_rate'] = 1
+
+    df.loc[df.bmi >= 25, 'bmi'] = 0
+    df.loc[((df.bmi < 25) & (df.bmi != 0)), 'bmi'] = 1
+
+    df.loc[df.age >= 70, 'age'] = 1
+    df.loc[((df.age < 70) & (df.age != 1)), 'age'] = 0
+
+    df.loc[df['6_minute_walking_test_result'] >= 200, '6_minute_walking_test_result'] = 1
+    df.loc[((df['6_minute_walking_test_result'] < 200) & (
+                df['6_minute_walking_test_result'] != 1)), '6_minute_walking_test_result'] = 0
+
+    df.loc[df.blood_hemoglobin_level >= 350, 'blood_hemoglobin_level'] = 1
+    df.loc[((df.blood_hemoglobin_level < 350) & (df.blood_hemoglobin_level != 1)), 'blood_hemoglobin_level'] = 0
+
+    return df
+
+
+def get_records(df: pd.DataFrame, conditions: Dict) -> List:
+    records = []
+
+    for record in df.to_dict('records'):
+        record_data = {}
+        points = sum([record['breathlessness'],
+                            record['weight_changed'],
+                            record['heart_failure_complaints'],
+                            record['heart_rhythm_type'],
+                            record['position_in_bed'],
+                            record['swollen_cervical_veins'],
+                            record['wheezing_in_lungs'],
+                            record['liver_state'],
+                            record['edema'],
+                            record['systolic_pressure']])
+
+        if not points:
+            functional_class = 'Отсутствие признаков ХСН'
+            record_data['FK'] = functional_class
+            record_data['receipt'] = 'Лечение не требуется'
+            records.append(record_data)
+            continue
+        if points <= 3:
+            record['FK'] = 1
+            functional_class = 'I ФК'
+        elif 4 <= points <= 6:
+            record['FK'] = 2
+            functional_class = 'II ФК'
+        elif 7 <= points <= 9:
+            record['FK'] = 3
+            functional_class = 'III ФК'
+        else:
+            record['FK'] = 4
+            functional_class = 'IV ФК'
+
+        df_texts = []
+        for condition in conditions:
+            valid_num_of_conditons = len(condition)
+            i = 0
+            for feature in conditions[condition]:
+                if isinstance(conditions[condition][feature], dict):
+                    if str(record[feature]) in conditions[condition][feature] and i == valid_num_of_conditons - 1:
+                        df_texts.extend(conditions[condition][feature][str(record[feature])])
+                elif isinstance(conditions[condition][feature], list):
+                    i += 1
+
+        record_data['FK'] = functional_class
+        record_data['receipt'] = '\n'.join(df_texts)
+        records.append(record_data)
+
+    return records
 
 
 def main() -> None:
-    """Run the bot."""
-    # Create the Updater and pass it your bot's token.
+    """
+    Для запуска из консоли введи команду 'python3 bot.py --path <path_to_dataset>'
+    Для запуска бота введи команду 'python3 bot.py'
+    """
+
     config = dotenv_values(".env")
 
     updater = Updater(token=config['TOKEN'])
 
     dispatcher = updater.dispatcher
 
-    questions = {question_name: Question(question_name) for question_name in questions_data}
+    question_files = listdir(config['QUESTIONS_PATH'])
 
-    entry_points = [CommandHandler(questions['start'].question_name, questions['start'].ask)]
+    questions_data = {}
+    for question_file in question_files:
+        with open(config['QUESTIONS_PATH'] + question_file, 'r') as f:
+            questions_data.update(load(f))
 
-    states = {
-        getattr(FUNCTIONAL_FEATURES, question_name):
-            [MessageHandler(Filters.regex(
-                questions[question_name].regex),
-                questions[question_name].ask
-            )]
-        for question_name in questions
-    }
-    # Add conversation handler with the states GENDER, PHOTO, LOCATION and BIO
-    conv_handler = ConversationHandler(
-        entry_points=entry_points,
-        states=states,
-        fallbacks=[CommandHandler('cancel', cancel)],
-    )
+    conditions = {}
+    condition_files = listdir(config['CONDITIONS_PATH'])
+    for condition_file in condition_files:
+        with open(config['CONDITIONS_PATH'] + condition_file, 'r') as f:
+            conditions.update(load(f))
 
-    dispatcher.add_handler(conv_handler)
+    parser = argparse.ArgumentParser(description='Process dataset.')
+    parser.add_argument('--path', type=str, help='path to dataset', required=False)
 
-    # Start the Bot
-    updater.start_polling()
+    args = parser.parse_args()
 
-    # Run the bot until you press Ctrl-C or the process receives SIGINT,
-    # SIGTERM or SIGABRT. This should be used most of the time, since
-    # start_polling() is non-blocking and will stop the bot gracefully.
-    # updater.idle()
+    if args.path:
+        df = pd.read_csv(args.path)
+        df = preprocess_df(df)
+        records = get_records(df, conditions)
+        records_df = pd.DataFrame(records)
+        records_df.to_csv('records.csv')
+        print('Results were written to records.csv file')
+        return
+    else:
+        questions = {question_name: Question(question_name, questions_data, conditions) for question_name in questions_data}
+
+        entry_points = [CommandHandler(questions['start'].question_name, questions['start'].ask)]
+
+        states = {
+            question_name:
+                [MessageHandler(Filters.regex(
+                    questions[question_name].regex),
+                    questions[question_name].ask
+                )]
+            for question_name in questions
+        }
+
+        conv_handler = ConversationHandler(
+            entry_points=entry_points,
+            states=states,
+            fallbacks=[CommandHandler('cancel', cancel)],
+        )
+
+        dispatcher.add_handler(conv_handler)
+
+        updater.start_polling()
+
+    # updater.start_webhook(listen="0.0.0.0",
+    #                       port=int(config['PORT']),
+    #                       webhook_url='https://hidden-island-83862.herokuapp.com/')
+        updater.idle()
 
 
 if __name__ == '__main__':

@@ -1,0 +1,175 @@
+{
+    "init_question": {
+        "next_": "intolerance_to_adrenoblockers",
+        "type": "reply",
+        "encoded_replies": {},
+        "text": "Ответьте пожалуйста на несколько дополнительных вопросов. Ваши ответы очень важны для выбора правильного способа лечения. Скажите пожалуйста, есть ли у вас непереносимости β-адреноблокаторов - БАБ?",
+        "next_question_reply_keyboard": [["Нет", "Да"]]
+    },
+    "intolerance_to_adrenoblockers": {
+        "next_": "heart_rate",
+        "type": "reply",
+        "encoded_replies": {
+            "Нет": 0,
+            "Да": 1
+        },
+        "text": "Частота ваших сердечных сокращений меньше 70 уд/мин?",
+        "next_question_reply_keyboard": [["Нет", "Да"]]
+    },
+    "heart_rate": {
+          "next_": "bmi",
+          "type": "reply",
+          "encoded_replies": {
+              "Нет": 0,
+              "Да": 1
+          },
+          "text": "Ваш индекс массы/тела меньше 25 кг/м^2?",
+          "next_question_reply_keyboard": [["Нет", "Да"]]
+      },
+      "bmi": {
+        "next_": "age",
+        "type": "reply",
+        "encoded_replies": {
+            "Нет": 0,
+            "Да": 1
+        },
+        "text": "Ваш возраст больше 70 лет?",
+        "next_question_reply_keyboard": [["Нет", "Да"]]
+    },
+    "age": {
+          "next_": "6_minute_walking_test_result",
+          "type": "reply",
+          "encoded_replies": {
+              "Нет": 0,
+              "Да": 1
+          },
+          "text": "Просим вас пройти 6-минутный тест. Походите пожалуйста пешком без остановки в течении 6 минут. Удалось ли вам пройти больше 200м?",
+          "next_question_reply_keyboard": [["Нет", "Да"]]
+      },
+    "6_minute_walking_test_result": {
+          "next_": "ejection_fraction",
+          "type": "reply",
+          "encoded_replies": {
+              "Нет": 0,
+              "Да": 1
+          },
+          "text": "Выберите пожалуйста уровень фракции выброса",
+          "next_question_reply_keyboard": [["Низкая - <40%", "Промежуточная - 40-49%", "Сохраненная - 50% и более"]]
+      },
+    "ejection_fraction": {
+      "next_": "blood_hemoglobin_level",
+      "type": "reply",
+      "encoded_replies": {
+        "Низкая - <40%": 0,
+        "Промежуточная - 40-49%": 1,
+        "Сохраненная - 50% и более": 2
+      },
+      "text": "Выберите пожалуйста уровень гемоглобина в крови - г/л",
+      "next_question_reply_keyboard": [
+        [
+          "Меньше 120 г/л",
+          "Больше 120 г/л"
+        ]
+      ]
+    },
+    "blood_hemoglobin_level": {
+          "next_": "atrial_fibrillation",
+          "type": "reply",
+          "encoded_replies": {
+              "Меньше 120 г/л": 0,
+              "Больше 120 г/л": 1
+          },
+          "text": "Имеется ли у вас фибрилляция предсердий?",
+          "next_question_reply_keyboard": [["Нет", "Да"]]
+      },
+    "atrial_fibrillation": {
+          "next_": "venous_thrombosis",
+          "type": "reply",
+          "encoded_replies": {
+              "Нет": 0,
+              "Да": 1
+          },
+          "text": "Имеется ли у вас венозный тромбоз?",
+          "next_question_reply_keyboard": [["Нет", "Да"]]
+      },
+    "venous_thrombosis": {
+          "next_": "pulmonary_embolism",
+          "type": "reply",
+          "encoded_replies": {
+              "Нет": 0,
+              "Да": 1
+          },
+          "text": "Имеется ли у вас тромбоэмболия лёгочной артерии?",
+          "next_question_reply_keyboard": [["Нет", "Да"]]
+      },
+    "pulmonary_embolism": {
+          "next_": "intracardiac_thrombosis",
+          "type": "reply",
+          "encoded_replies": {
+              "Нет": 0,
+              "Да": 1
+          },
+          "text": "Имеется ли у вас внутрисердечный тромбоз?",
+          "next_question_reply_keyboard": [["Нет", "Да"]]
+      },
+    "intracardiac_thrombosis": {
+          "next_": "decompensation",
+          "type": "reply",
+          "encoded_replies": {
+              "Нет": 0,
+              "Да": 1
+          },
+          "text": "Имеется ли у вас декомпенсация?",
+          "next_question_reply_keyboard": [["Нет", "Да"]]
+      },
+    "decompensation": {
+          "next_": "ischemic_etiology",
+          "type": "reply",
+          "encoded_replies": {
+              "Нет": 0,
+              "Да": 1
+          },
+          "text": "Имеется ли у вас ишемическая этиология ХСН?",
+          "next_question_reply_keyboard": [["Нет", "Да"]]
+      },
+    "ischemic_etiology": {
+          "next_": "alcoholic_cardiomyopathy",
+          "type": "reply",
+          "encoded_replies": {
+              "Нет": 0,
+              "Да": 1
+          },
+          "text": "Имеется ли у вас алкогольная кардиомиопатия?",
+          "next_question_reply_keyboard": [["Нет", "Да"]]
+      },
+    "alcoholic_cardiomyopathy": {
+          "next_": "intolerance_to_ace_inhibitors",
+          "type": "reply",
+          "encoded_replies": {
+              "Нет": 0,
+              "Да": 1
+          },
+          "text": "Имеется ли у вас непереносимость ингибиторов ангиотензинпревращающего фермента - иАПФ?",
+          "next_question_reply_keyboard": [["Нет", "Да"]]
+      },
+    "intolerance_to_ace_inhibitors": {
+          "next_": "hypervolemia",
+          "type": "reply",
+          "encoded_replies": {
+              "Нет": 0,
+              "Да": 1
+          },
+          "text": "Имеется ли у вас гиперволемия?",
+          "next_question_reply_keyboard": [["Нет", "Да"]]
+      },
+    "hypervolemia": {
+        "next_": "",
+        "type": "final_conclusion",
+        "encoded_replies": {
+            "Нет": 0,
+            "Да": 1
+        },
+        "text": "",
+        "next_question_reply_keyboard": [[]]
+    }
+}
