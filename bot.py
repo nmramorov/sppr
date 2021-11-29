@@ -1,6 +1,7 @@
 import logging
 from typing import Dict, List, AnyStr
 from json import load
+from os import listdir
 from dotenv import dotenv_values
 from telegram import Update, ReplyKeyboardMarkup, ReplyKeyboardRemove
 from telegram.ext import (
@@ -28,8 +29,7 @@ def info(update: Update, context: CallbackContext):
 
 def get_functional_conclusion(update: Update,
                               context: CallbackContext,
-                              next_: str,
-                              next_question_reply_keyboard: List[List[AnyStr]]):
+                              next_: str):
     points = sum(user_info.values())
     if not points:
         functional_class = 'отсутствие клинических признаков СН.'
@@ -82,7 +82,7 @@ def dialog_function(update: Update,
         )
         return next_
     elif question_type == 'functional_conclusion':
-        return get_functional_conclusion(update, context, next_, next_question_reply_keyboard)
+        return get_functional_conclusion(update, context, next_)
     elif question_type == 'final_conclusion':
         return get_final_conclusion(update, context, next_)
     else:
@@ -138,19 +138,18 @@ class Question:
 
 
 def main() -> None:
-    """Run the bot."""
+
     config = dotenv_values(".env")
 
     updater = Updater(token=config['TOKEN'])
 
     dispatcher = updater.dispatcher
 
-    question_files = ['questions_config/functional_questions.json',
-                      'questions_config/additional_questions.json']
+    question_files = listdir(config['QUESTIONS_PATH'])
 
     questions_data = {}
     for question_file in question_files:
-        with open(question_file, 'r') as f:
+        with open(config['QUESTIONS_PATH'] + question_file, 'r') as f:
             questions_data.update(load(f))
 
     questions = {question_name: Question(question_name, questions_data) for question_name in questions_data}
