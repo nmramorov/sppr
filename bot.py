@@ -3,6 +3,7 @@ from typing import Dict, List, AnyStr
 from json import load
 from os import listdir
 from dotenv import dotenv_values
+import pandas as pd
 from telegram import Update, ReplyKeyboardMarkup, ReplyKeyboardRemove
 from telegram.ext import (
     Updater,
@@ -12,6 +13,7 @@ from telegram.ext import (
     Filters,
     ConversationHandler
 )
+import argparse
 
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
                     level=logging.INFO)
@@ -22,18 +24,12 @@ user_info = {}
 receipts = []
 
 
-def info(update: Update, context: CallbackContext):
-    context.bot.send_message(chat_id=update.effective_chat.id,
-                             text="Привет, меня зовут Original Symptom Checker bot. Мои создатели: "
-                                  "Мраморов Никита и Роман Ефремов из группы J41325c")
-
-
 def get_functional_conclusion(update: Update,
                               context: CallbackContext,
                               next_: str):
     points = sum(user_info.values())
     if not points:
-        functional_class = 'отсутствие клинических признаков СН.'
+        functional_class = 'отсутствуют клинические признаки ХСН.'
     elif points <= 3:
         user_info['FK'] = 1
         functional_class = 'I ФК'
@@ -46,14 +42,15 @@ def get_functional_conclusion(update: Update,
     else:
         user_info['FK'] = 4
         functional_class = 'IV ФК'
+    added = 'Для продолжения отправьте любое сообщение.' if 'FK' in user_info else ''
     context.bot.send_message(chat_id=update.effective_chat.id,
                              text=f"Получены данные пациента: {user_info}.\n"
                                   f"Сумма баллов ФК: {points}\n"
-                                  f'У вас {functional_class}\n'
-                                  f'Для продолжения отправьте любое сообщение.',
+                                  f'У вас {functional_class}\n' + added,
+
                              reply_markup=ReplyKeyboardRemove())
 
-    return next_ if next_ else ConversationHandler.END
+    return next_ if next_ and functional_class != 'Отсутствие клинических признаков СН.' else ConversationHandler.END
 
 
 def get_final_conclusion(update: Update, context: CallbackContext, next_: str, conditions: Dict):
@@ -65,15 +62,13 @@ def get_final_conclusion(update: Update, context: CallbackContext, next_: str, c
         for feature in conditions[condition]:
             if isinstance(conditions[condition][feature], dict):
                 if str(user_info[feature]) in conditions[condition][feature] and i == valid_num_of_conditons - 1:
-                    #print(conditions[condition][feature][str(user_info[feature])])
                     texts.extend(conditions[condition][feature][str(user_info[feature])])
             elif isinstance(conditions[condition][feature], list):
                 i += 1
 
-    #print(texts)
     receipts.append('\n'.join(texts))
     context.bot.send_message(chat_id=update.effective_chat.id,
-                             text=f'Ваше лечение: {receipts[0]}',
+                             text=f'Ваше лечение:\n\n{receipts[0]}',
                              reply_markup=ReplyKeyboardRemove())
     return next_ if next_ else ConversationHandler.END
 
@@ -119,7 +114,7 @@ def cancel(update: Update, context: CallbackContext) -> int:
     user = update.message.from_user
     logger.info("User %s canceled the conversation.", user.first_name)
     update.message.reply_text(
-        'Bye! I hope we can talk again some day.', reply_markup=ReplyKeyboardRemove()
+        'До свидания!', reply_markup=ReplyKeyboardRemove()
     )
 
     return ConversationHandler.END
@@ -157,7 +152,90 @@ class Question:
                                conditions=self.conditions)
 
 
+def preprocess_df(df: pd.DataFrame):
+    df.rename(columns={'weigth_changed': 'weight_changed'}, inplace=True)
+    values = {}
+    for column in df.columns:
+        uniques = df[column].unique()
+        if len(uniques) > 5:
+            values[column] = df[column].mean()
+        else:
+            values[column] = 0
+
+    df.fillna(value=values, inplace=True)
+    df = df[values.keys()].apply(pd.to_numeric)
+
+    df.loc[df.systolic_pressure > 120, 'systolic_pressure'] = 0
+    df.loc[((df.systolic_pressure >= 85) & (df.systolic_pressure <= 120)), 'systolic_pressure'] = 1
+    df.loc[((df.systolic_pressure < 85) & (df.systolic_pressure != 0) & (
+                df.systolic_pressure != 1)), 'systolic_pressure'] = 2
+
+    df.loc[df.heart_rate >= 70, 'heart_rate'] = 0
+    df.loc[((df.heart_rate < 70) & (df.heart_rate != 0)), 'heart_rate'] = 1
+
+    df.loc[df.bmi >= 25, 'bmi'] = 0
+    df.loc[((df.bmi < 25) & (df.bmi != 0)), 'bmi'] = 1
+
+    df.loc[df.age >= 70, 'age'] = 1
+    df.loc[((df.age < 70) & (df.age != 1)), 'age'] = 0
+
+    df.loc[df['6_minute_walking_test_result'] >= 200, '6_minute_walking_test_result'] = 1
+    df.loc[((df['6_minute_walking_test_result'] < 200) & (
+                df['6_minute_walking_test_result'] != 1)), '6_minute_walking_test_result'] = 0
+
+    df.loc[df.blood_hemoglobin_level >= 350, 'blood_hemoglobin_level'] = 1
+    df.loc[((df.blood_hemoglobin_level < 350) & (df.blood_hemoglobin_level != 1)), 'blood_hemoglobin_level'] = 0
+
+    return df
+
+
+def get_receipts(df: pd.DataFrame, conditions: Dict) -> List:
+    df_receipts = []
+
+    for record in df.to_dict('records'):
+        points = sum([record['breathlessness'],
+                            record['weight_changed'],
+                            record['heart_failure_complaints'],
+                            record['heart_rhythm_type'],
+                            record['position_in_bed'],
+                            record['swollen_cervical_veins'],
+                            record['wheezing_in_lungs'],
+                            record['liver_state'],
+                            record['edema'],
+                            record['systolic_pressure']])
+
+        if not points:
+            df_receipts.append(['Отсутствие признаков ХСН'])
+            continue
+        elif points <= 3:
+            record['FK'] = 1
+        elif 4 <= points <= 6:
+            record['FK'] = 2
+        elif 7 <= points <= 9:
+            record['FK'] = 3
+        else:
+            record['FK'] = 4
+
+        df_texts = []
+        for condition in conditions:
+            valid_num_of_conditons = len(condition)
+            i = 0
+            for feature in conditions[condition]:
+                if isinstance(conditions[condition][feature], dict):
+                    if str(record[feature]) in conditions[condition][feature] and i == valid_num_of_conditons - 1:
+                        df_texts.extend(conditions[condition][feature][str(record[feature])])
+                elif isinstance(conditions[condition][feature], list):
+                    i += 1
+        df_receipts.append(df_texts)
+
+    return df_receipts
+
+
 def main() -> None:
+    """
+    Для запуска из консоли введи команду 'python3 bot.py <path_to_dataset>'
+    Для запуска бота введи команду 'python3 bot.py'
+    """
 
     config = dotenv_values(".env")
 
@@ -178,36 +256,45 @@ def main() -> None:
         with open(config['CONDITIONS_PATH'] + condition_file, 'r') as f:
             conditions.update(load(f))
 
-    questions = {question_name: Question(question_name, questions_data, conditions) for question_name in questions_data}
+    parser = argparse.ArgumentParser(description='Process dataset.')
+    parser.add_argument('--path', type=str, help='path to dataset', required=False)
 
-    entry_points = [CommandHandler(questions['start'].question_name, questions['start'].ask)]
+    args = parser.parse_args()
 
-    states = {
-        question_name:
-            [MessageHandler(Filters.regex(
-                questions[question_name].regex),
-                questions[question_name].ask
-            )]
-        for question_name in questions
-    }
+    if args.path:
+        df = pd.read_csv(args.path)
+        df = preprocess_df(df)
+        df['receipts'] = get_receipts(df, conditions)
+        print(df.receipts.head())
+        return
+    else:
+        questions = {question_name: Question(question_name, questions_data, conditions) for question_name in questions_data}
 
-    conv_handler = ConversationHandler(
-        entry_points=entry_points,
-        states=states,
-        fallbacks=[CommandHandler('cancel', cancel)],
-    )
+        entry_points = [CommandHandler(questions['start'].question_name, questions['start'].ask)]
 
-    dispatcher.add_handler(conv_handler)
+        states = {
+            question_name:
+                [MessageHandler(Filters.regex(
+                    questions[question_name].regex),
+                    questions[question_name].ask
+                )]
+            for question_name in questions
+        }
 
-    updater.start_polling()
+        conv_handler = ConversationHandler(
+            entry_points=entry_points,
+            states=states,
+            fallbacks=[CommandHandler('cancel', cancel)],
+        )
 
+        dispatcher.add_handler(conv_handler)
 
-
+        updater.start_polling()
 
     # updater.start_webhook(listen="0.0.0.0",
     #                       port=int(config['PORT']),
     #                       webhook_url='https://hidden-island-83862.herokuapp.com/')
-    updater.idle()
+        updater.idle()
 
 
 if __name__ == '__main__':
